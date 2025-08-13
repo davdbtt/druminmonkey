@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<title>Drum Metronome Exercise Timer — Offline</title>
+<style>
+  :root{
+    --neutral:#ffdc00; /* yellow */
+    --break:#48ade0;   /* blue */
+    --active:#f578ff;  /* pink */
+    --paused:#ac6ef4;  /* orange */
+    --text:#000;
+  }
+  html,body{height:100%;margin:0;}
+  body{
+    font-family: 'Courier New', monospace;
+    background: var(--neutral);
+    color:var(--text);
+    -webkit-font-smoothing:antialiased;
+    -moz-osx-font-smoothing:grayscale;
+    overflow-y:auto;
+  }
+
+  /* Full screen progress tint that grows left->right (25% tint) */
+  #progress-bg{
+    pointer-events:none;
+    position:fixed; inset:0; z-index:-1;
+    background: linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 0%);
+    background-size:0% 100%;
+    background-repeat:no-repeat;
+    background-position:left center;
+  }
+
+  .app{max-width:900px;margin:18px auto;padding:60px 18px 18px 18px;}
+  h1{font-family:'Courier New',monospace;font-weight:bold;text-align:center;font-size:12px;margin:40px 0 12px 0;letter-spacing:1px;}
+
+  .big-box{border:none;padding:12px;border-radius:8px;text-align:center;margin-bottom:12px;}
+  #currentExercise{
+	  font-family: "Press Start 2P", system-ui, 'Courier New', monospace;
+	  text-transform: uppercase;
+	  padding-bottom: 8px;
+	  font-size: 60px;
+	  font-weight: 800;
+	color:#FFF;}
+	
+  #currentHand{ 
+	  font-family: "Press Start 2P", system-ui, 'Courier New', monospace;
+	  text-transform: uppercase;
+	  font-size:18px;
+	  color:black;
+	  display:inline-block;
+	  min-width:100px;}
+  #monkeyBox{
+    /* FIX: monkey centred as a box, text left-aligned inside */
+    border:none;background:none;
+    font-weight:bold;white-space:pre;text-align:left;
+    font-family:"Press Start 2P", system-ui, 'Courier New',monospace;font-size:22px;line-height:1;
+    min-width:10px;display:block; width:max-content; max-width:100%;
+    margin:10px auto; /* centers the box */
+  }
+  #beatIndicatorBox{margin-top:10px;}
+  .beat-dot{width:18px;height:18px;border-radius:50%;display:inline-block;margin:0 6px;border:8px solid #FFF;background:transparent;}
+  .beat-dot.active{background:#e925f4;}
+  #timerSmall{font-family:"Press Start 2P", system-ui, 'Courier New', monospace;font-size:16px;margin-top:8px;color:#000;}
+  .controls{display:flex;gap:12px;justify-content:center;margin:10px 0 18px 0;}
+  .controls button{font-family:"Press Start 2P", system-ui, 'Courier New', monospace;font-size:20px;font-weight:bold;padding:11px 16px 10px 19px;border-radius:6px;border:none;background:#000;cursor:pointer; text-transform: uppercase;color:#FFF;}
+  .controls button[disabled]{opacity:.6;cursor:not-allowed;font-family:'Courier New', monospace;}
+  .bpm{display:flex;gap:8px;justify-content:center;align-items:center;margin-bottom:14px;}
+  #bpmInput{width:80px;font-family:'Courier New', monospace;font-weight:bold;font-size:20px;padding:8px 8px 8px 20px;border:none;border-radius:6px;text-align:center;}
+
+  .list-box{border:none;padding:10px;border-radius:8px;background:none;margin-bottom:12px;}
+  #intervalList{list-style:none;margin:0;padding:0;}
+  .interval-row{
+    display:grid;
+    grid-template-columns: 48px 1fr auto auto; /* arrows | desc | editors | delete */
+    gap:10px; align-items:center;
+    padding:8px;border-bottom:1px solid #000;
+  }
+  .interval-row:first-child{border-top:6px solid #000;padding-top:16px;margin-top:40px;}
+  .interval-row:last-child{border-bottom:1px solid #000;}
+  .interval-row.active{background-color: rgba(255, 255, 255, 0.3);border-color:#e925f4;color:#e925f4;font-weight:bold;}
+  .arrows{display:flex;flex-direction:column;gap:6px;}
+  .arrowBtn{width:36px;height:28px;border:none;background:#fff;cursor:pointer;border-radius:6px;font-family:'Courier New', monospace;font-weight:bold;}
+  .arrowBtn[disabled]{opacity:.0;cursor:not-allowed;}
+  .desc-static{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .desc-input{
+    width:100%;max-width:100%;padding:10px;background:none;border:none;border-radius:6px;font-size:16px;font-family:'Courier New', monospace;
+  }
+  .edit-pack{display:flex;gap:8px;align-items:center;justify-content:flex-end;}
+  .edit-pack input[type="number"]{
+    width:140px;padding:6px;border:none;border-radius:6px;font-family:'Courier New', monospace;
+    /* FIX: spacing to the right of seconds box */
+    margin-right:8px;
+  }
+  .edit-pack select{padding:6px;border:none;border-radius:6px;font-family:'Courier New', monospace;}
+  .tags{display:flex;gap:10px;align-items:center;justify-content:flex-end;}
+  .tag{padding:6px;border:none;border-radius:4px;background:none;font-size:14px;width:140px;margin:6px;}
+  .deleteBtn{background:#000;border:none;padding:7px 6px 6px 8px;border-radius:6px;cursor:pointer;font-weight:bold;font-family:"Press Start 2P", system-ui, 'Courier New', monospace;color:#fff;}
+  .deleteBtn[disabled]{opacity:.0;cursor:not-allowed;}
+
+  #addForm{display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap;}
+  #addForm input[type="text"]{margin-left:65px;width:400px;padding:10px;border:none;border-radius:6px;font-family:'Courier New', monospace;font-size:16px;color:#000;}
+  #addForm input[type="number"]{width:90px;padding:10px;border:none;border-radius:6px;font-family:'Courier New', monospace;font-size:16px;color:#000;}
+  #addForm select{padding:10px;border:none;border-radius:10px;font-family:'Courier New', monospace;font-size:16px;color:#000;}
+  #addForm button{background:black;border:none;padding:13px 12px 12px 15px;border-radius:6px;cursor:pointer;font-weight:bold;color:white;font-family:"Press Start 2P", system-ui, 'Courier New', monospace;color:#fff;font size:16px; text-transform: uppercase;}
+	
+  #advancedToggle{display:block;margin:12px 0px 12px 0px;width:100%;text-align:center;padding:0px;border:none;background:none;cursor:pointer;border-radius:8px;font-weight:bold;font-family:'Courier New', monospace;font-size:16px;}
+  #advanced{text-align:center;display:none;border-top:1px solid #000;padding:8px;background:none;}
+  #advanced label{text-align:center;display:block;margin:6px 0;font-size:13px;font-family:'Courier New', monospace;}
+  .hint{font-size:12px;color:#000;margin-top:6px;text-align:center;}
+
+  @media (max-width:640px){
+    .interval-row{grid-template-columns: 40px 1fr; grid-template-rows:auto auto; }
+    .tags,.edit-pack{justify-content:flex-start;}
+  }
+</style>
+</head>
+<body>
+  <div id="progress-bg"></div>
+
+  <div class="app" role="main">
+    <h1>&nbsp;</h1>
+
+    <div class="big-box" id="currentBox">
+      <div id="currentExercise">Ready</div>
+      <div id="currentHand"></div>
+      <div id="timerSmall">00:00</div>
+    </div>
+
+    <div id="monkeyBox" class="big-box" aria-hidden="true"></div>
+    <div id="beatIndicatorBox" class="big-box" style="padding:10px 12px;">
+      <div id="beatDots" aria-hidden="true"></div>
+    </div>
+
+    <div class="controls">
+      <button id="startPauseBtn" aria-pressed="false">Start</button>
+      <button id="resetBtn">Reset</button>
+    </div>
+
+    <div class="bpm">
+<!--      <label for="bpmInput"><strong>BPM</strong></label>-->
+      <input id="bpmInput" type="number" min="40" max="500" value="140" />
+    </div>
+
+    <div class="list-box" role="region" aria-label="Intervals">
+      <ul id="intervalList"></ul>
+
+      <form id="addForm" onsubmit="return false;">
+        <input id="addDesc" type="text" placeholder="Description" required />
+        <input id="addSeconds" type="number" placeholder="Seconds" min="1" required />
+        <select id="addHand">
+          <option value="alternate">Alternate L/R</option>
+          <option value="both">Both Hands</option>
+        </select>
+        <button id="addBtn">Add</button>
+      </form>
+<!--      <div class="hint">Edit rows when Paused/Stopped. Changes apply on next Start.</div>-->
+    </div>
+
+    <div id="advancedToggle">Advanced Settings ▾</div>
+    <div id="advanced">
+      <label>Break length (bars, 0–4)
+        <input id="breakBars" type="number" min="0" max="4" value="2" />
+      </label>
+      <label><input id="metronomeToggle" type="checkbox" checked /> Enable metronome</label>
+      <label>Accent style
+        <select id="accentStyle">
+          <option value="quarter">Quarter notes (4)</option>
+          <option value="triplet">Triplets (3)</option>
+          <option value="none">None</option>
+        </select>
+      </label>
+    </div>
+  </div>
+
+<script>
+(function(){
+  /* ===================== Defaults ===================== */
+  const DEFAULT_INTERVALS = [
+    {description:"Thumbs Down", seconds:30, handMode:"alternate"},
+    {description:"Thumbs Down Accents", seconds:30, handMode:"alternate"},
+    {description:"Hands Up Triplets", seconds:30, handMode:"alternate"},
+    {description:"Hands Up 32nd Notes", seconds:30, handMode:"alternate"},
+    {description:"Stick Hold Fingers", seconds:30, handMode:"alternate"},
+    {description:"Stick Hold Palms", seconds:30, handMode:"alternate"},
+    {description:"Cigar Hold", seconds:30, handMode:"both"},
+    {description:"Little Sticks", seconds:30, handMode:"both"},
+    {description:"Standard Grip", seconds:30, handMode:"both"}
+  ];
+
+  /* ===================== DOM refs ===================== */
+  const bpmInput = document.getElementById('bpmInput');
+  const startPauseBtn = document.getElementById('startPauseBtn');
+  const resetBtn = document.getElementById('resetBtn');
+  const intervalList = document.getElementById('intervalList');
+  const addBtn = document.getElementById('addBtn');
+  const addDesc = document.getElementById('addDesc');
+  const addSeconds = document.getElementById('addSeconds');
+  const addHand = document.getElementById('addHand');
+  const monkeyBox = document.getElementById('monkeyBox');
+  const beatDots = document.getElementById('beatDots');
+  const currentExercise = document.getElementById('currentExercise');
+  const currentHand = document.getElementById('currentHand');
+  const timerSmall = document.getElementById('timerSmall');
+  const progressBg = document.getElementById('progress-bg');
+  const advancedToggle = document.getElementById('advancedToggle');
+  const advanced = document.getElementById('advanced');
+  const breakBarsInput = document.getElementById('breakBars');
+  const metronomeToggle = document.getElementById('metronomeToggle');
+  const accentStyleSel = document.getElementById('accentStyle');
+
+  /* ===================== Audio ===================== */
+  let audioCtx = null;
+  function ensureAudio(){ if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+
+  const scheduleAheadTime = 0.1; // seconds
+  const lookahead = 25; // ms
+  let schedulerId = null;
+  let nextNoteTime = 0;
+
+  /* ===================== State ===================== */
+  let bpm = parseInt(bpmInput.value,10) || 140;
+
+  // FIX: bar size adapts to accent style (4 for quarter, 3 for triplet)
+  function beatsPerBarCurrent(style=accentStyleSel.value){
+    if(style === 'triplet') return 3;
+    return 4; // quarter or none
+  }
+
+  let breakBars = parseInt(breakBarsInput.value,10) || 2;
+  let metronomeOn = metronomeToggle.checked;
+
+  // sequence entries: {type:'break'|'interval', idx, hand, beats}
+  let sequence = [];
+  let seqPos = 0;
+  let beatInPhase = 0;        // increments on each beat arrival
+  let phaseStartMs = 0;       // for progress/timer display
+  let running = false;
+  let paused = false;
+  let pausedElapsedMs = 0;    // FIX: track elapsed in phase when pausing (for resume)
+  let monkeyPose = 0;
+
+  let intervals = JSON.parse(JSON.stringify(DEFAULT_INTERVALS));
+
+  /* ===================== Time helpers ===================== */
+  function secondsToBeats(seconds, bpmLocal){ return Math.max(1, Math.round(seconds * (bpmLocal/60))); }
+  function beatsToBars(beats, beatsPerBar){ return Math.max(1, Math.round(beats / beatsPerBar)); }
+  function barsToBeats(bars, beatsPerBar){ return bars * beatsPerBar; }
+  function beatDuration(bpmLocal){ return 60 / bpmLocal; }
+
+  /* ===================== Build sequence ===================== */
+  function buildSequenceFromIntervals(){
+    const seq = [];
+    const localBpm = bpm;
+
+    // use current accent style to define meter for *bar rounding* and *break length*
+    const bpb = beatsPerBarCurrent();
+    const breakBeats = Math.max(0, (parseInt(breakBarsInput.value,10)||0)) * bpb;
+
+    // initial pre-roll break (quiet), but UI stays NEUTRAL until Start is pressed
+    if(breakBeats > 0) seq.push({type:'break', idx:-1, hand:'both', beats: breakBeats});
+
+    for(let i=0;i<intervals.length;i++){
+      const it = intervals[i];
+      const beatsRounded = secondsToBeats(it.seconds, localBpm);
+      const bars = beatsToBars(beatsRounded, bpb);
+      const actualBeats = barsToBeats(bars, bpb);
+
+      if(it.handMode === 'alternate'){
+        seq.push({type:'interval', idx:i, hand:'right', beats: actualBeats});
+        if(breakBeats>0) seq.push({type:'break', idx:i, hand:'both', beats: breakBeats});
+        seq.push({type:'interval', idx:i, hand:'left', beats: actualBeats});
+      } else {
+        seq.push({type:'interval', idx:i, hand:'both', beats: actualBeats});
+      }
+      if(i < intervals.length - 1 && breakBeats>0) seq.push({type:'break', idx:i, hand:'both', beats: breakBeats});
+    }
+    return seq;
+  }
+
+  /* ===================== Clicks ===================== */
+  function playClick(atTime, accent=false, breakClick=false){
+    if(!audioCtx || !metronomeOn) return;
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.connect(g); g.connect(audioCtx.destination);
+    o.type = 'square';
+    if(breakClick){
+      o.frequency.setValueAtTime(420, atTime);
+      g.gain.setValueAtTime(0.06, atTime);
+    } else if(accent){
+      o.frequency.setValueAtTime(1000, atTime);
+      g.gain.setValueAtTime(0.22, atTime);
+    } else {
+      o.frequency.setValueAtTime(640, atTime);
+      g.gain.setValueAtTime(0.12, atTime);
+    }
+    g.gain.exponentialRampToValueAtTime(0.001, atTime + 0.08);
+    o.start(atTime); o.stop(atTime + 0.09);
+  }
+
+  /* ===================== Scheduler ===================== */
+  function startScheduler(){
+    if(schedulerId) return;
+    if(!audioCtx) ensureAudio();
+    nextNoteTime = audioCtx.currentTime + 0.05;
+    schedulerId = setInterval(schedulerLoop, lookahead);
+  }
+  function stopScheduler(){ if(schedulerId){ clearInterval(schedulerId); schedulerId = null; } }
+
+  function schedulerLoop(){
+    if(!audioCtx) return;
+    const now = audioCtx.currentTime;
+    while(nextNoteTime < now + scheduleAheadTime){
+      scheduleTick(nextNoteTime);
+      nextNoteTime += beatDuration(bpm);
+    }
+  }
+
+  function scheduleTick(atTime){
+    const cur = sequence[seqPos];
+    if(!cur){ stop(); return; }
+
+    // AUDIO
+    let accent = false;
+    if(cur.type !== 'break'){
+      // accent style affects accents only; scheduling remains steady
+      const style = accentStyleSel.value;
+      if(style === 'quarter') accent = (beatInPhase % 4 === 0);
+      else if(style === 'triplet') accent = (beatInPhase % 3 === 0);
+      // style "none": accent remains false
+    }
+    const isBreakClick = (cur.type === 'break');
+    playClick(atTime, accent, isBreakClick);
+
+    // VISUAL: fire at the exact moment the audio lands
+    const msUntil = Math.max(0, (atTime - audioCtx.currentTime) * 1000);
+    setTimeout(onBeatArrival, Math.round(msUntil));
+  }
+
+  /* ===================== Visual beat arrival ===================== */
+  function onBeatArrival(){
+    if(paused || !running) return;
+    const cur = sequence[seqPos];
+    if(!cur) return;
+
+    // FIX: dots are always present; on breaks they are blank (no fill)
+    renderBeatDotsLive(cur);
+
+    // Toggle monkey pose on each beat
+    monkeyPose = 1 - monkeyPose;
+    renderMonkey();
+
+    // advance counters
+    beatInPhase++;
+    if(beatInPhase >= cur.beats){
+      seqPos++;
+      beatInPhase = 0;
+      phaseStartMs = performance.now();
+      if(seqPos >= sequence.length){ stop(); return; }
+      // on new phase: show blank dots (visible but unfilled until first beat)
+      renderBeatDotsBlank();
+      updatePhaseUI(true);
+    }
+  }
+
+  /* ===================== UI ===================== */
+  function updatePhaseUI(fromPhaseChange=false){
+    const cur = sequence[seqPos];
+    if(!cur){
+      currentExercise.textContent = "Done!";
+      currentHand.textContent = "";
+      setBgNeutral();
+      timerSmall.textContent = "00:00";
+      renderIntervals();
+      return;
+    }
+	  if(cur.type === 'break'){
+      currentExercise.textContent = "Break";
+      currentHand.textContent = "";
+      setBgBreak();
+    } else {
+      const it = intervals[cur.idx];
+      currentExercise.textContent = it.description;
+      if(cur.hand === 'right') currentHand.textContent = "  RIGHT HAND";
+      else if(cur.hand === 'left') currentHand.textContent = "LEFT HAND  ";
+      else currentHand.textContent = "BOTH HANDS";
+      setBgActive();
+    }
+    if(fromPhaseChange){
+      // reset visual timer/progress for each phase
+      updatePhaseTimerAndProgress(true);
+    }else{
+      updatePhaseTimerAndProgress(false);
+    }
+    renderIntervals();
+  }
+
+  function updatePhaseTimerAndProgress(reset=false){
+    const cur = sequence[seqPos];
+    if(!cur){
+      timerSmall.textContent = "00:00";
+      progressBg.style.background = 'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 0%)';
+      return;
+    }
+    const phaseDurSec = cur.beats * beatDuration(bpm);
+    if(reset) phaseStartMs = performance.now(); // FIX: ensure per-phase reset
+    const elapsedMs = Math.max(0, performance.now() - phaseStartMs);
+    const elapsedSec = elapsedMs / 1000;
+    const remaining = Math.max(0, phaseDurSec - elapsedSec);
+    const mm = Math.floor(remaining/60), ss = Math.floor(remaining%60);
+    timerSmall.textContent = (mm<10?'0'+mm:mm) + ':' + (ss<10?'0'+ss:ss);
+
+    const pct = Math.min(1, elapsedSec / phaseDurSec) * 100;
+    if(cur.type === 'break'){
+      progressBg.style.background = `linear-gradient(to right, rgba(255,255,255,0.25) 0%, rgba(255,255,255,0.25) ${pct}%, rgba(0,0,0,0) ${pct}%)`;
+    } else {
+      progressBg.style.background = `linear-gradient(to right, rgba(255,255,255,0.25) 0%, rgba(255,255,255,0.25) ${pct}%, rgba(0,0,0,0) ${pct}%)`;
+    }
+  }
+
+  /* ===================== Beat dots ===================== */
+  function renderBeatDotsBlank(){
+    // Always show circles according to current accent style; no filled dot yet
+    const style = accentStyleSel.value;
+    const count = (style === 'triplet') ? 3 : (style === 'none' ? 4 : 4);
+    beatDots.innerHTML = '';
+    for(let i=0;i<count;i++){
+      const d = document.createElement('div');
+      d.className = 'beat-dot'; // no .active
+      beatDots.appendChild(d);
+    }
+  }
+
+  function renderBeatDotsLive(cur){
+    const style = accentStyleSel.value;
+    const count = (style === 'triplet') ? 3 : (style === 'none' ? 4 : 4);
+
+    // Make sure we always show the circles
+    if(beatDots.children.length !== count){
+      renderBeatDotsBlank();
+    }
+    // During breaks: no filled indicator (blank dots only)
+    if(cur.type === 'break'){
+      for(let i=0;i<count;i++){
+        beatDots.children[i].classList.remove('active');
+      }
+      return;
+    }
+    // Active: fill current index BEFORE increment -> exact beat
+    const activeIndex = beatInPhase % count;
+    for(let i=0;i<count;i++){
+      beatDots.children[i].classList.toggle('active', i===activeIndex);
+    }
+  }
+
+  function renderMonkey(){
+    const p1 = [
+"    /~\\",
+"   { Oo",
+"o  _( ^)",
+" \\/ ~ ~\\",
+"        \\",
+"         o"
+    ].join('\n');
+    const p2 = [
+"    /~\\",
+"    oO }",
+"   (^ )_  o",
+"  /~ ~  \\/",
+" /",
+"o"
+    ].join('\n');
+    monkeyBox.textContent = (monkeyPose ? p2 : p1);
+  }
+
+  /* ===================== Interval list ===================== */
+  function buildEditableRow(it, idx, isActive){
+    const li = document.createElement('li'); li.className = 'interval-row' + (isActive ? ' active' : '');
+
+    const arrows = document.createElement('div'); arrows.className='arrows';
+    const up = document.createElement('button'); up.className='arrowBtn'; up.textContent='▲';
+    up.onclick = ()=>{ moveInterval(idx,'up'); renderIntervals(); };
+    /*const down = document.createElement('button'); down.className='arrowBtn'; down.textContent='▼';
+    down.onclick = ()=>{ moveInterval(idx,'down'); renderIntervals(); };*/
+    arrows.appendChild(up); /*arrows.appendChild(down);*/
+
+    const descInput = document.createElement('input'); descInput.className='desc-input';
+    descInput.type='text'; descInput.value=it.description; descInput.title='Description';
+    descInput.oninput = (e)=>{ intervals[idx].description = e.target.value; };
+
+    const editors = document.createElement('div'); editors.className='edit-pack';
+    const secInput = document.createElement('input');
+    secInput.type='number'; secInput.min=1; secInput.value = it.seconds; secInput.title='Seconds';
+    secInput.oninput = (e)=>{ const v = parseInt(e.target.value||0,10); if(v>0) intervals[idx].seconds = v; };
+    const handSel = document.createElement('select');
+    const o1 = document.createElement('option'); o1.value='alternate'; o1.text='Alternate L/R';
+    const o2 = document.createElement('option'); o2.value='both'; o2.text='Both Hands';
+    handSel.appendChild(o1); handSel.appendChild(o2);
+    handSel.value = it.handMode; handSel.onchange = (e)=>{ intervals[idx].handMode = e.target.value; };
+    editors.appendChild(secInput); editors.appendChild(handSel);
+
+    const del = document.createElement('button'); del.className='deleteBtn'; del.textContent='X';
+    del.onclick = ()=>{ intervals.splice(idx,1); renderIntervals(); };
+
+    li.appendChild(arrows);
+    li.appendChild(descInput);
+    li.appendChild(editors);
+    li.appendChild(del);
+    return li;
+  }
+
+  function buildStaticRow(it, idx, isActive){
+    const li = document.createElement('li'); li.className = 'interval-row' + (isActive ? ' active' : '');
+
+    const arrows = document.createElement('div'); arrows.className='arrows';
+    const up = document.createElement('button'); up.className='arrowBtn'; up.textContent='▲'; up.disabled = true;
+    /*const down = document.createElement('button'); down.className='arrowBtn'; down.textContent='▼'; down.disabled = true;*/
+    arrows.appendChild(up); /*arrows.appendChild(down);*/
+
+    const desc = document.createElement('div'); desc.className='desc-static'; desc.textContent = it.description;
+
+    const tags = document.createElement('div'); tags.className='tags';
+    const s = document.createElement('span'); s.className='tag'; s.textContent = it.seconds + 's';
+    const h = document.createElement('span'); h.className='tag'; h.textContent = (it.handMode==='alternate'?'Alternate L/R':'Both Hands');
+    tags.appendChild(s); tags.appendChild(h);
+
+    const del = document.createElement('button'); del.className='deleteBtn'; del.textContent='X'; del.disabled = true;
+
+    li.appendChild(arrows);
+    li.appendChild(desc);
+    li.appendChild(tags);
+    li.appendChild(del);
+    return li;
+  }
+
+  function renderIntervals(){
+    intervalList.innerHTML = '';
+    const cur = sequence[seqPos] || null;
+    const editable = (!running || paused);
+    intervals.forEach((it, idx)=>{
+      const isActive = !!(cur && cur.type==='interval' && cur.idx===idx);
+      const row = editable ? buildEditableRow(it, idx, isActive)
+                           : buildStaticRow(it, idx, isActive);
+      intervalList.appendChild(row);
+    });
+  }
+
+  function moveInterval(index, dir){
+    if(dir==='up' && index>0){ [intervals[index-1], intervals[index]] = [intervals[index], intervals[index-1]]; }
+    else if(dir==='down' && index < intervals.length-1){ [intervals[index+1], intervals[index]] = [intervals[index], intervals[index+1]]; }
+  }
+
+  /* ===================== Background helpers ===================== */
+  function setBgNeutral(){ document.body.style.background = getComputedStyle(document.documentElement).getPropertyValue('--neutral') || '#fff8a0'; }
+  function setBgBreak(){ if(!paused) document.body.style.background = getComputedStyle(document.documentElement).getPropertyValue('--break') || '#add8e6'; }
+  function setBgActive(){ if(!paused) document.body.style.background = getComputedStyle(document.documentElement).getPropertyValue('--active') || '#a8f0a8'; }
+  function setBgPaused(){ document.body.style.background = getComputedStyle(document.documentElement).getPropertyValue('--paused') || '#ffa500'; }
+
+  /* ===================== Run control ===================== */
+
+  function freshStart(){
+    // Build everything from current controls
+    bpm = Math.max(40, Math.min(500, parseInt(bpmInput.value)||140));
+    breakBars = Math.max(0, Math.min(4, parseInt(breakBarsInput.value)||2));
+    metronomeOn = metronomeToggle.checked;
+
+    sequence = buildSequenceFromIntervals();
+    seqPos = 0;
+    beatInPhase = 0;
+    phaseStartMs = performance.now();
+    monkeyPose = 0;
+    pausedElapsedMs = 0;
+
+    ensureAudio();
+    if(audioCtx.state !== 'running') audioCtx.resume();
+    nextNoteTime = audioCtx.currentTime + 0.05;
+
+    startScheduler();
+    running = true; paused = false;
+
+    // set first phase visuals
+    renderBeatDotsBlank(); // visible but unfilled until first tick
+    updatePhaseUI(true);
+    renderMonkey();
+    renderIntervals();
+    startPauseBtn.textContent = 'Pause'; startPauseBtn.setAttribute('aria-pressed','true');
+
+    requestAnimationFrame(visualLoop);
+  }
+
+  // FIX: proper pause that preserves position (no reset)
+  function pause(){
+    if(!running || paused) return;
+    paused = true;
+
+    // capture how much of current phase has elapsed for accurate resume
+    pausedElapsedMs = performance.now() - phaseStartMs;
+
+    stopScheduler();
+    if(audioCtx && audioCtx.state === 'running') audioCtx.suspend();
+
+    startPauseBtn.textContent = 'Start'; startPauseBtn.setAttribute('aria-pressed','false');
+    setBgPaused(); // instant orange feedback
+    renderIntervals(); // editable while paused
+  }
+
+  // FIX: resume exactly from where paused
+  function resumeFromPause(){
+    if(!running || !paused) return;
+    paused = false;
+
+    ensureAudio();
+    audioCtx.resume().then(()=>{
+      // schedule next beat shortly in the future
+      nextNoteTime = audioCtx.currentTime + 0.05;
+      startScheduler();
+
+      // restore the phase start so timer/progress pick up smoothly
+      phaseStartMs = performance.now() - pausedElapsedMs;
+
+      updatePhaseUI(); // sets active/break colour immediately
+      startPauseBtn.textContent = 'Pause'; startPauseBtn.setAttribute('aria-pressed','true');
+      requestAnimationFrame(visualLoop);
+    });
+  }
+
+  function stop(){
+    running = false; paused = false;
+    stopScheduler();
+    if(audioCtx && audioCtx.state === 'running') audioCtx.suspend();
+    seqPos = sequence.length;
+    renderIntervals();
+    setBgNeutral(); // back to yellow
+    timerSmall.textContent = "00:00";
+    progressBg.style.background = 'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 0%)';
+    // dots visible but blank
+    renderBeatDotsBlank();
+    currentExercise.textContent = "Done!";
+    currentHand.textContent = "";
+    startPauseBtn.textContent = 'Start'; startPauseBtn.setAttribute('aria-pressed','false');
+  }
+
+  function reset(){
+    stopScheduler();
+    if(audioCtx && audioCtx.state === 'running') audioCtx.suspend();
+    running = false; paused = false;
+    pausedElapsedMs = 0;
+
+    bpm = Math.max(40, Math.min(500, parseInt(bpmInput.value)||140));
+    breakBars = Math.max(0, Math.min(4, parseInt(breakBarsInput.value)||2));
+    sequence = buildSequenceFromIntervals();
+    seqPos = 0; beatInPhase = 0; phaseStartMs = performance.now();
+    monkeyPose = 0;
+
+    // READY state: yellow, dots visible but blank
+    setBgNeutral();
+    progressBg.style.background = 'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 0%)';
+    timerSmall.textContent = "00:00";
+    currentExercise.textContent = "Ready";
+    currentHand.textContent = "";
+    renderBeatDotsBlank();
+    renderMonkey();
+    renderIntervals();
+    startPauseBtn.textContent = 'Start'; startPauseBtn.setAttribute('aria-pressed','false');
+  }
+
+  function visualLoop(){
+    if(!running || paused) return;
+    updatePhaseTimerAndProgress(false);
+    requestAnimationFrame(visualLoop);
+  }
+
+  /* ===================== Init ===================== */
+  function init(){
+    renderMonkey();
+    setBgNeutral(); // start yellow
+    sequence = buildSequenceFromIntervals();
+    seqPos = 0; beatInPhase = 0; phaseStartMs = performance.now();
+    renderBeatDotsBlank(); // visible but blank
+    currentExercise.textContent = "Ready"; currentHand.textContent = ""; timerSmall.textContent = "00:00";
+    renderIntervals(); // editable
+  }
+  init();
+
+  /* ===================== Events ===================== */
+  startPauseBtn.addEventListener('click', ()=>{
+    // Start from stopped, or resume from paused
+    if(!running && !paused){ freshStart(); return; }
+    if(running && paused){ resumeFromPause(); return; }
+    if(running && !paused){ pause(); return; }
+  });
+
+  resetBtn.addEventListener('click', reset);
+
+  addBtn.addEventListener('click', (e)=>{
+    e.preventDefault();
+    const d = addDesc.value.trim(), s = parseInt(addSeconds.value,10), h = addHand.value;
+    if(!d || !s || s<1){ alert('Enter description and valid seconds'); return; }
+    intervals.push({description:d, seconds:s, handMode:h});
+    addDesc.value=''; addSeconds.value=''; addHand.value='alternate';
+    renderIntervals();
+  });
+
+  advancedToggle.addEventListener('click', ()=>{
+    advanced.style.display = (advanced.style.display === 'block') ? 'none' : 'block';
+    advancedToggle.textContent = advanced.style.display === 'block' ? 'Advanced Settings ▴' : 'Advanced Settings ▾';
+  });
+
+  bpmInput.addEventListener('change', ()=>{ bpm = Math.max(40, Math.min(500, parseInt(bpmInput.value)||140)); });
+
+  breakBarsInput.addEventListener('change', ()=>{
+    breakBars = Math.max(0, Math.min(4, parseInt(breakBarsInput.value)||2));
+    // Rebuild preview sequence; applies on next start/reset
+    sequence = buildSequenceFromIntervals();
+    renderIntervals();
+  });
+
+  metronomeToggle.addEventListener('change', ()=>{ /* live toggle, no rebuild needed */ });
+
+  // FIX: Switching accent style mid-run won't break audio; we DON'T rebuild sequence automatically.
+  // We only update the dots immediately; bar size for breaks/rounding applies on next fresh start/reset.
+  accentStyleSel.addEventListener('change', ()=>{
+    renderBeatDotsBlank(); // new dot count visible and blank until next beat
+    if(!running){ setBgNeutral(); } // keep visual tidy when stopped
+  });
+
+})();
+</script>
+</body>
+</html>
